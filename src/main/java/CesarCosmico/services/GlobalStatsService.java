@@ -97,33 +97,6 @@ public class GlobalStatsService {
         }
     }
 
-    public void incrementBatch(List<TrackingContext> contexts) {
-        if (contexts == null || contexts.isEmpty()) return;
-
-        lock.writeLock().lock();
-        try {
-            for (TrackingContext context : contexts) {
-                String type = context.getType();
-                String category = context.getCategory();
-                int amount = context.getAmount();
-
-                Map<String, Map<String, Integer>> typeData = globalStats.computeIfAbsent(type,
-                        k -> new ConcurrentHashMap<>());
-                Map<String, Integer> categoryData = typeData.computeIfAbsent(category,
-                        k -> new ConcurrentHashMap<>());
-
-                categoryData.merge("total", amount, Integer::sum);
-
-                if (context.hasItem()) {
-                    categoryData.merge(context.getItem(), amount, Integer::sum);
-                }
-            }
-            statsModified = true;
-        } finally {
-            lock.writeLock().unlock();
-        }
-    }
-
     private void cleanupEmptyStats(String type, String category,
                                    Map<String, Map<String, Integer>> typeData,
                                    Map<String, Integer> categoryData) {

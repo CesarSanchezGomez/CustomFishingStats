@@ -117,46 +117,8 @@ public class PlayerData {
         return total;
     }
 
-    public Map<String, Integer> getCategoryData(String type, String category) {
-        Map<String, Map<String, Integer>> typeData = stats.get(type);
-        if (typeData == null) return new HashMap<>();
-        Map<String, Integer> categoryData = typeData.get(category);
-        if (categoryData == null) return new HashMap<>();
-        return new HashMap<>(categoryData);
-    }
-
-    public boolean hasType(String type) {
-        return stats.containsKey(type);
-    }
-
-    public boolean hasCategory(String type, String category) {
-        Map<String, Map<String, Integer>> typeData = stats.get(type);
-        return typeData != null && typeData.containsKey(category);
-    }
-
-    public Set<String> getCategoriesByType(String type) {
-        Map<String, Map<String, Integer>> typeData = stats.get(type);
-        if (typeData == null) {
-            return new HashSet<>();
-        }
-        return new HashSet<>(typeData.keySet());
-    }
-
     public Set<String> getAllTypes() {
         return new HashSet<>(stats.keySet());
-    }
-
-    public void invalidateCache() {
-        typeTotalCache.clear();
-        typeCacheDirty = true;
-    }
-
-    public Map<String, Integer> getTypeTotals() {
-        Map<String, Integer> totals = new HashMap<>();
-        for (String type : stats.keySet()) {
-            totals.put(type, getTotalByType(type));
-        }
-        return totals;
     }
 
     public UUID getUuid() {
