@@ -15,18 +15,8 @@ import io.papermc.paper.command.brigadier.Commands;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import org.bukkit.command.CommandSender;
 
-import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
-/**
- * Comando administrativo para remover estadísticas globales.
- * Responsabilidad única: Gestionar la remoción de estadísticas globales del servidor.
- *
- * Aplica:
- * - Single Responsibility: Solo gestiona remoción de stats globales
- * - Open/Closed: Extendible sin modificar implementación existente
- * - Interface Segregation: Sugerencias separadas por responsabilidad
- */
 @SuppressWarnings("UnstableApiUsage")
 public class RemoveGlobalStatsCommand extends BaseCommand {
 
@@ -62,31 +52,27 @@ public class RemoveGlobalStatsCommand extends BaseCommand {
             String category = ctx.getArgument("category", String.class);
             int requestedAmount = ctx.getArgument("amount", Integer.class);
 
-            int currentAmount = getCurrentAmount(type, category, item);
-            int actuallyRemoved = Math.min(currentAmount, requestedAmount);
+            TrackingContext context = buildTrackingContext(type, category, requestedAmount, item);
 
-            if (actuallyRemoved > 0) {
-                TrackingContext context = buildTrackingContext(type, category, actuallyRemoved, item);
-                plugin.decrementGlobalStats(context);
-                plugin.invalidateRankingCache();
-                sendSuccessMessage(sender, type, category, actuallyRemoved, item);
-            } else {
-                sendPrefixed(sender, "errors.global_has_no_stats");
-            }
+            plugin.removeStatsTransactional(null, context)
+                    .thenAccept(actuallyRemoved -> {
+                        if (actuallyRemoved > 0) {
+                            sendSuccessMessage(sender, type, category, actuallyRemoved, item);
+                        } else {
+                            sendPrefixed(sender, "errors.global_has_no_stats");
+                        }
+                    })
+                    .exceptionally(throwable -> {
+                        plugin.getLogger().severe("Error removing global stats: " + throwable.getMessage());
+                        sendPrefixed(sender, "errors.operation_failed");
+                        return null;
+                    });
 
             return Command.SINGLE_SUCCESS;
         } catch (Exception e) {
             handleError(ctx, e);
             return 0;
         }
-    }
-
-    private int getCurrentAmount(String type, String category, String item) {
-        if (item != null) {
-            Map<String, Integer> items = plugin.getCategoryItems(type, category);
-            return items.getOrDefault(item, 0);
-        }
-        return plugin.getCategoryTotal(type, category);
     }
 
     private TrackingContext buildTrackingContext(String type, String category, int amount, String item) {

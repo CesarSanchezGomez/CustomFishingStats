@@ -7,14 +7,6 @@ import org.bukkit.plugin.java.JavaPlugin;
 import java.io.File;
 import java.util.List;
 
-/**
- * Gestor de configuración del plugin.
- * Responsabilidad única: Gestionar la carga y acceso a la configuración.
- *
- * Aplica:
- * - Single Responsibility: Solo maneja configuración
- * - Open/Closed: Extensible mediante nuevas opciones de config
- */
 public class ConfigManager {
     private final JavaPlugin plugin;
     private FileConfiguration config;

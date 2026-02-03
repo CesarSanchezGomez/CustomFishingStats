@@ -9,8 +9,8 @@ import org.bukkit.OfflinePlayer;
 
 import java.io.File;
 import java.util.*;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.*;
+import java.util.stream.Collectors;
 
 public class RankingService {
 
@@ -22,7 +22,13 @@ public class RankingService {
     private final Map<String, CachedRanking> rankingCache = new ConcurrentHashMap<>();
     private final Map<String, CachedProgressRanking> progressRankingCache = new ConcurrentHashMap<>();
     private final Set<String> calculatingKeys = ConcurrentHashMap.newKeySet();
+
+    private final ExecutorService calculationExecutor;
     private volatile boolean isCalculating = false;
+
+    private static final int MAX_THREADS = 4;
+    private static final int BATCH_SIZE = 50;
+    private static final int CACHE_DURATION_MS = 5 * 60 * 1000;
 
     public static class PlayerRankEntry {
         private final UUID uuid;
@@ -79,6 +85,13 @@ public class RankingService {
         this.customFishing = BukkitCustomFishingPlugin.getInstance();
         this.customFishingCategoriesMap = customFishingCategoriesMap != null
                 ? Map.copyOf(customFishingCategoriesMap) : Map.of();
+
+        this.calculationExecutor = Executors.newFixedThreadPool(MAX_THREADS,
+                r -> {
+                    Thread t = new Thread(r, "RankingCalculation");
+                    t.setDaemon(true);
+                    return t;
+                });
     }
 
     public List<PlayerRankEntry> getTopPlayersWithUUID(String type, String category, int limit) {
@@ -105,7 +118,7 @@ public class RankingService {
     public List<Map.Entry<String, Integer>> getTopPlayers(String type, String category, int limit) {
         return getTopPlayersWithUUID(type, category, limit).stream()
                 .map(entry -> Map.entry(entry.getName(), entry.getScore()))
-                .collect(java.util.stream.Collectors.toList());
+                .collect(Collectors.toList());
     }
 
     public List<PlayerRankEntry> getTopPlayersByTypeWithUUID(String type, int limit) {
@@ -132,7 +145,7 @@ public class RankingService {
     public List<Map.Entry<String, Integer>> getTopPlayersByType(String type, int limit) {
         return getTopPlayersByTypeWithUUID(type, limit).stream()
                 .map(entry -> Map.entry(entry.getName(), entry.getScore()))
-                .collect(java.util.stream.Collectors.toList());
+                .collect(Collectors.toList());
     }
 
     public List<PlayerProgressEntry> getTopPlayersByProgressWithUUID(String category, int limit) {
@@ -152,7 +165,7 @@ public class RankingService {
     public List<Map.Entry<String, Double>> getTopPlayersByProgress(String category, int limit) {
         return getTopPlayersByProgressWithUUID(category, limit).stream()
                 .map(entry -> Map.entry(entry.getName(), entry.getProgress()))
-                .collect(java.util.stream.Collectors.toList());
+                .collect(Collectors.toList());
     }
 
     public int getPlayerRank(UUID targetUuid, String type, String category) {
@@ -174,25 +187,22 @@ public class RankingService {
         String playerName = getPlayerName(uuid);
         if (playerName == null) return;
 
-        Iterator<Map.Entry<String, CachedRanking>> iterator = rankingCache.entrySet().iterator();
-        while (iterator.hasNext()) {
-            Map.Entry<String, CachedRanking> entry = iterator.next();
+        rankingCache.entrySet().removeIf(entry -> {
             CachedRanking cached = entry.getValue();
-
             if (cached.containsPlayer(playerName)) {
-                iterator.remove();
-                continue;
+                return true;
             }
+            return false;
+        });
 
-            String cacheKey = entry.getKey();
-            String type = cacheKey.contains(":") ? cacheKey.substring(0, cacheKey.indexOf(':')) : null;
-            if (type != null && !type.equals("progress")) {
-                String allKey = type + ":__ALL__";
-                if (rankingCache.containsKey(allKey)) {
-                    rankingCache.remove(allKey);
-                }
+        Set<String> typesToInvalidate = new HashSet<>();
+        for (String key : rankingCache.keySet()) {
+            if (key.contains(":")) {
+                String type = key.substring(0, key.indexOf(':'));
+                typesToInvalidate.add(type + ":__ALL__");
             }
         }
+        typesToInvalidate.forEach(rankingCache::remove);
     }
 
     public void invalidateCategoryCache(String type, String category) {
@@ -210,21 +220,29 @@ public class RankingService {
                 Bukkit.getPluginManager().getPlugin("CustomFishingStats"),
                 () -> {
                     isCalculating = true;
-                    rankingCache.clear();
+                    try {
+                        // OPTIMIZED: Solo recalcular lo que está en caché
+                        Set<String> keysToRecalculate = new HashSet<>(rankingCache.keySet());
 
-                    for (String type : customFishingCategoriesMap.keySet()) {
-                        calculateTopPlayersByType(type, 1000);
+                        for (String key : keysToRecalculate) {
+                            if (key.contains(":")) {
+                                String[] parts = key.split(":", 2);
+                                String type = parts[0];
+                                String category = parts.length > 1 ? parts[1] : null;
 
-                        Set<String> categories = customFishingCategoriesMap.get(type);
-                        if (categories != null) {
-                            for (String category : categories) {
-                                calculateTopPlayers(type, category, 1000);
+                                if (category != null && !category.equals("__ALL__")) {
+                                    calculateTopPlayers(type, category, 1000);
+                                } else {
+                                    calculateTopPlayersByType(type, 1000);
+                                }
                             }
                         }
-                    }
 
-                    storageManager.clearOfflineCache();
-                    isCalculating = false;
+                        // Limpiar caché offline después de recalcular
+                        storageManager.clearOfflineCache();
+                    } finally {
+                        isCalculating = false;
+                    }
                 }
         );
     }
@@ -269,46 +287,61 @@ public class RankingService {
         }
 
         try {
-            Map<UUID, PlayerRankEntry> playerScores = new ConcurrentHashMap<>();
+            ConcurrentHashMap<UUID, PlayerRankEntry> playerScores = new ConcurrentHashMap<>();
             Set<UUID> allPlayerUUIDs = getAllPlayerUUIDs();
 
-            int batchSize = 100;
             List<UUID> uuidList = new ArrayList<>(allPlayerUUIDs);
-            List<CompletableFuture<Void>> batchFutures = new ArrayList<>();
+            List<CompletableFuture<Void>> futures = new ArrayList<>();
 
-            for (int i = 0; i < uuidList.size(); i += batchSize) {
-                int end = Math.min(i + batchSize, uuidList.size());
+            for (int i = 0; i < uuidList.size(); i += BATCH_SIZE) {
+                int end = Math.min(i + BATCH_SIZE, uuidList.size());
                 List<UUID> batch = uuidList.subList(i, end);
 
-                CompletableFuture<Void> batchFuture = CompletableFuture.runAsync(() -> {
-                    for (UUID uuid : batch) {
-                        try {
-                            String playerName = getPlayerName(uuid);
-                            if (playerName == null || playerName.isEmpty()) continue;
-
-                            int score = getPlayerScore(uuid, type, category);
-                            if (score > 0) {
-                                playerScores.put(uuid, new PlayerRankEntry(uuid, playerName, score));
-                            }
-                        } catch (Exception e) {
-                            // Skip
-                        }
-                    }
-                });
-                batchFutures.add(batchFuture);
+                CompletableFuture<Void> future = CompletableFuture.runAsync(() ->
+                        processBatch(batch, type, category, playerScores), calculationExecutor
+                );
+                futures.add(future);
             }
 
-            CompletableFuture.allOf(batchFutures.toArray(new CompletableFuture[0])).join();
+            CompletableFuture<Void> allOf = CompletableFuture.allOf(
+                    futures.toArray(new CompletableFuture[0])
+            );
+
+            try {
+                allOf.get(30, TimeUnit.SECONDS);
+            } catch (TimeoutException e) {
+                Bukkit.getLogger().warning("Ranking calculation timeout for " + cacheKey);
+            }
 
             List<PlayerRankEntry> sorted = playerScores.values().stream()
                     .sorted(Comparator.comparingInt(PlayerRankEntry::getScore).reversed())
-                    .collect(java.util.stream.Collectors.toList());
+                    .collect(Collectors.toList());
 
             rankingCache.put(cacheKey, new CachedRanking(sorted));
 
-            return sorted.stream().limit(limit).collect(java.util.stream.Collectors.toList());
+            return sorted.stream().limit(limit).collect(Collectors.toList());
+        } catch (Exception e) {
+            Bukkit.getLogger().severe("Error calculating ranking: " + e.getMessage());
+            return Collections.emptyList();
         } finally {
             calculatingKeys.remove(cacheKey);
+        }
+    }
+
+    private void processBatch(List<UUID> batch, String type, String category,
+                              ConcurrentHashMap<UUID, PlayerRankEntry> playerScores) {
+        for (UUID uuid : batch) {
+            try {
+                String playerName = getPlayerName(uuid);
+                if (playerName == null || playerName.isEmpty()) continue;
+
+                int score = getPlayerScore(uuid, type, category);
+                if (score > 0) {
+                    playerScores.put(uuid, new PlayerRankEntry(uuid, playerName, score));
+                }
+            } catch (Exception e) {
+                // Skip player on error
+            }
         }
     }
 
@@ -324,18 +357,17 @@ public class RankingService {
         }
 
         try {
-            Map<UUID, PlayerRankEntry> playerScores = new ConcurrentHashMap<>();
+            ConcurrentHashMap<UUID, PlayerRankEntry> playerScores = new ConcurrentHashMap<>();
             Set<UUID> allPlayerUUIDs = getAllPlayerUUIDs();
 
-            int batchSize = 100;
             List<UUID> uuidList = new ArrayList<>(allPlayerUUIDs);
-            List<CompletableFuture<Void>> batchFutures = new ArrayList<>();
+            List<CompletableFuture<Void>> futures = new ArrayList<>();
 
-            for (int i = 0; i < uuidList.size(); i += batchSize) {
-                int end = Math.min(i + batchSize, uuidList.size());
+            for (int i = 0; i < uuidList.size(); i += BATCH_SIZE) {
+                int end = Math.min(i + BATCH_SIZE, uuidList.size());
                 List<UUID> batch = uuidList.subList(i, end);
 
-                CompletableFuture<Void> batchFuture = CompletableFuture.runAsync(() -> {
+                CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
                     for (UUID uuid : batch) {
                         try {
                             String playerName = getPlayerName(uuid);
@@ -352,19 +384,27 @@ public class RankingService {
                             // Skip
                         }
                     }
-                });
-                batchFutures.add(batchFuture);
+                }, calculationExecutor);
+                futures.add(future);
             }
 
-            CompletableFuture.allOf(batchFutures.toArray(new CompletableFuture[0])).join();
+            try {
+                CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
+                        .get(30, TimeUnit.SECONDS);
+            } catch (TimeoutException e) {
+                Bukkit.getLogger().warning("Ranking calculation timeout for " + cacheKey);
+            }
 
             List<PlayerRankEntry> sorted = playerScores.values().stream()
                     .sorted(Comparator.comparingInt(PlayerRankEntry::getScore).reversed())
-                    .collect(java.util.stream.Collectors.toList());
+                    .collect(Collectors.toList());
 
             rankingCache.put(cacheKey, new CachedRanking(sorted));
 
-            return sorted.stream().limit(limit).collect(java.util.stream.Collectors.toList());
+            return sorted.stream().limit(limit).collect(Collectors.toList());
+        } catch (Exception e) {
+            Bukkit.getLogger().severe("Error calculating ranking: " + e.getMessage());
+            return Collections.emptyList();
         } finally {
             calculatingKeys.remove(cacheKey);
         }
@@ -382,7 +422,7 @@ public class RankingService {
         }
 
         try {
-            Map<UUID, PlayerProgressEntry> playerProgress = new ConcurrentHashMap<>();
+            ConcurrentHashMap<UUID, PlayerProgressEntry> playerProgress = new ConcurrentHashMap<>();
             Set<UUID> allPlayerUUIDs = getAllPlayerUUIDs();
 
             List<String> categoryMembers = customFishing.getStatisticsManager()
@@ -394,15 +434,14 @@ public class RankingService {
 
             int totalItems = categoryMembers.size();
 
-            int batchSize = 100;
             List<UUID> uuidList = new ArrayList<>(allPlayerUUIDs);
-            List<CompletableFuture<Void>> batchFutures = new ArrayList<>();
+            List<CompletableFuture<Void>> futures = new ArrayList<>();
 
-            for (int i = 0; i < uuidList.size(); i += batchSize) {
-                int end = Math.min(i + batchSize, uuidList.size());
+            for (int i = 0; i < uuidList.size(); i += BATCH_SIZE) {
+                int end = Math.min(i + BATCH_SIZE, uuidList.size());
                 List<UUID> batch = uuidList.subList(i, end);
 
-                CompletableFuture<Void> batchFuture = CompletableFuture.runAsync(() -> {
+                CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
                     for (UUID uuid : batch) {
                         try {
                             String playerName = getPlayerName(uuid);
@@ -416,19 +455,27 @@ public class RankingService {
                             // Skip
                         }
                     }
-                });
-                batchFutures.add(batchFuture);
+                }, calculationExecutor);
+                futures.add(future);
             }
 
-            CompletableFuture.allOf(batchFutures.toArray(new CompletableFuture[0])).join();
+            try {
+                CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
+                        .get(30, TimeUnit.SECONDS);
+            } catch (TimeoutException e) {
+                Bukkit.getLogger().warning("Progress calculation timeout for " + cacheKey);
+            }
 
             List<PlayerProgressEntry> sorted = playerProgress.values().stream()
                     .sorted(Comparator.comparingDouble(PlayerProgressEntry::getProgress).reversed())
-                    .collect(java.util.stream.Collectors.toList());
+                    .collect(Collectors.toList());
 
             progressRankingCache.put(cacheKey, new CachedProgressRanking(sorted));
 
-            return sorted.stream().limit(limit).collect(java.util.stream.Collectors.toList());
+            return sorted.stream().limit(limit).collect(Collectors.toList());
+        } catch (Exception e) {
+            Bukkit.getLogger().severe("Error calculating progress: " + e.getMessage());
+            return Collections.emptyList();
         } finally {
             calculatingKeys.remove(cacheKey);
         }
@@ -478,7 +525,7 @@ public class RankingService {
 
     private int getCustomScoreFromDisk(UUID uuid, String type, String category) {
         try {
-            PlayerData playerData = storageManager.loadPlayerData(uuid).join();
+            PlayerData playerData = storageManager.loadPlayerData(uuid).get(5, TimeUnit.SECONDS);
             if (playerData == null) return 0;
             return playerData.getCategoryTotal(type, category);
         } catch (Exception e) {
@@ -497,7 +544,7 @@ public class RankingService {
         }
 
         try {
-            PlayerData playerData = storageManager.loadPlayerData(uuid).join();
+            PlayerData playerData = storageManager.loadPlayerData(uuid).get(5, TimeUnit.SECONDS);
             if (playerData == null) return 0;
             return playerData.getTotalByType(type);
         } catch (Exception e) {
@@ -515,7 +562,8 @@ public class RankingService {
 
             CompletableFuture<Optional<net.momirealms.customfishing.api.storage.data.PlayerData>> future =
                     customFishing.getStorageManager().getDataSource().getPlayerData(uuid, false, Runnable::run);
-            Optional<net.momirealms.customfishing.api.storage.data.PlayerData> optional = future.get();
+            Optional<net.momirealms.customfishing.api.storage.data.PlayerData> optional =
+                    future.get(5, TimeUnit.SECONDS);
 
             if (optional.isEmpty() || optional.get().statistics() == null) {
                 return 0;
@@ -563,7 +611,7 @@ public class RankingService {
 
             CompletableFuture<Optional<UserData>> future =
                     customFishing.getStorageManager().getOfflineUserData(uuid, false);
-            Optional<UserData> offlineUser = future.join();
+            Optional<UserData> offlineUser = future.get(5, TimeUnit.SECONDS);
             return offlineUser.orElse(null);
         } catch (Exception e) {
             return null;
@@ -610,7 +658,7 @@ public class RankingService {
                 return cached.getName();
             }
 
-            PlayerData playerData = storageManager.loadPlayerData(uuid).join();
+            PlayerData playerData = storageManager.loadPlayerData(uuid).get(2, TimeUnit.SECONDS);
             if (playerData != null && playerData.getName() != null && !playerData.getName().isEmpty()) {
                 return playerData.getName();
             }
@@ -633,11 +681,21 @@ public class RankingService {
         }
     }
 
+    public void shutdown() {
+        calculationExecutor.shutdown();
+        try {
+            if (!calculationExecutor.awaitTermination(10, TimeUnit.SECONDS)) {
+                calculationExecutor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            calculationExecutor.shutdownNow();
+        }
+    }
+
     private static class CachedRanking {
         private final List<PlayerRankEntry> ranking;
         private final Set<String> playerSet;
         private final long timestamp;
-        private static final long CACHE_DURATION = 5 * 60 * 1000;
 
         public CachedRanking(List<PlayerRankEntry> ranking) {
             this.ranking = ranking;
@@ -649,11 +707,11 @@ public class RankingService {
         }
 
         public boolean isExpired() {
-            return System.currentTimeMillis() - timestamp > CACHE_DURATION;
+            return System.currentTimeMillis() - timestamp > CACHE_DURATION_MS;
         }
 
         public List<PlayerRankEntry> getTop(int limit) {
-            return ranking.stream().limit(limit).collect(java.util.stream.Collectors.toList());
+            return ranking.stream().limit(limit).collect(Collectors.toList());
         }
 
         public int getRank(String playerName) {
@@ -675,7 +733,6 @@ public class RankingService {
         private final List<PlayerProgressEntry> ranking;
         private final Set<String> playerSet;
         private final long timestamp;
-            private static final long CACHE_DURATION = 5 * 60 * 1000;
 
         public CachedProgressRanking(List<PlayerProgressEntry> ranking) {
             this.ranking = ranking;
@@ -687,7 +744,7 @@ public class RankingService {
         }
 
         public List<PlayerProgressEntry> getTop(int limit) {
-            return ranking.stream().limit(limit).collect(java.util.stream.Collectors.toList());
+            return ranking.stream().limit(limit).collect(Collectors.toList());
         }
     }
 }

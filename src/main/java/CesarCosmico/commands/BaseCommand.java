@@ -8,15 +8,6 @@ import org.bukkit.command.CommandSender;
 
 import java.util.List;
 
-/**
- * Clase base para todos los comandos.
- * Responsabilidad única: Proveer utilidades comunes de mensajería.
- *
- * Aplica:
- * - Single Responsibility: Solo maneja el envío de mensajes
- * - Open/Closed: Extendible sin modificación
- * - Dependency Inversion: Depende de abstracciones (MessagesManager)
- */
 public abstract class BaseCommand {
 
     protected final CustomFishingStats plugin;

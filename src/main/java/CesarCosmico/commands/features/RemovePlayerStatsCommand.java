@@ -2,7 +2,6 @@ package CesarCosmico.commands.features;
 
 import CesarCosmico.CustomFishingStats;
 import CesarCosmico.commands.BaseCommand;
-import CesarCosmico.storage.data.PlayerData;
 import CesarCosmico.tracking.TrackingContext;
 import com.mojang.brigadier.Command;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
@@ -19,19 +18,9 @@ import org.bukkit.OfflinePlayer;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
-/**
- * Comando administrativo para remover estadísticas de jugadores específicos.
- * Responsabilidad única: Gestionar la remoción de estadísticas de jugadores individuales.
- *
- * Aplica:
- * - Single Responsibility: Solo gestiona remoción de stats de jugadores
- * - Open/Closed: Extendible mediante estrategias de validación
- * - Interface Segregation: Métodos de sugerencias segregados
- */
 @SuppressWarnings("UnstableApiUsage")
 public class RemovePlayerStatsCommand extends BaseCommand {
 
@@ -76,56 +65,28 @@ public class RemovePlayerStatsCommand extends BaseCommand {
                 return 0;
             }
 
-            processRemoval(sender, resolver, type, category, requestedAmount, item);
+            TrackingContext context = buildTrackingContext(type, category, requestedAmount, item);
+
+            plugin.removeStatsTransactional(resolver.uuid, context)
+                    .thenAccept(actuallyRemoved -> {
+                        if (actuallyRemoved > 0) {
+                            sendSuccessMessage(sender, resolver.displayName, type, category,
+                                    actuallyRemoved, item);
+                        } else {
+                            sendPrefixed(sender, "errors.player_has_no_stats");
+                        }
+                    })
+                    .exceptionally(throwable -> {
+                        plugin.getLogger().severe("Error removing stats: " + throwable.getMessage());
+                        sendPrefixed(sender, "errors.operation_failed");
+                        return null;
+                    });
+
             return Command.SINGLE_SUCCESS;
 
         } catch (Exception e) {
             handleError(ctx, e);
             return 0;
-        }
-    }
-
-    private void processRemoval(CommandSender sender, PlayerResolver resolver,
-                                String type, String category, int requestedAmount, String item) {
-        plugin.getStorageManager().modifyPlayerData(resolver.uuid, playerData -> {
-            if (resolver.displayName != null && !resolver.displayName.equals(resolver.uuid.toString())) {
-                playerData.setName(resolver.displayName);
-            }
-
-            int currentAmount = getCurrentAmount(playerData, type, category, item);
-            int actuallyRemoved = Math.min(currentAmount, requestedAmount);
-
-            if (actuallyRemoved > 0) {
-                TrackingContext context = buildTrackingContext(type, category, actuallyRemoved, item);
-                playerData.removeStats(context);
-            }
-
-            return actuallyRemoved;
-        }).thenAccept(actuallyRemoved -> {
-            handleRemovalResult(sender, resolver.displayName, type, category, actuallyRemoved, item);
-        }).exceptionally(throwable -> {
-            plugin.getLogger().severe("Error removing stats: " + throwable.getMessage());
-            sendPrefixed(sender, "errors.operation_failed");
-            return null;
-        });
-    }
-
-    private int getCurrentAmount(PlayerData playerData, String type, String category, String item) {
-        if (item != null) {
-            return playerData.getItemAmount(type, category, item);
-        }
-        return playerData.getCategoryTotal(type, category);
-    }
-
-    private void handleRemovalResult(CommandSender sender, String displayName,
-                                     String type, String category, Integer actuallyRemoved, String item) {
-        if (actuallyRemoved != null && actuallyRemoved > 0) {
-            TrackingContext context = buildTrackingContext(type, category, actuallyRemoved, item);
-            plugin.decrementGlobalStats(context);
-            plugin.invalidateRankingCache();
-            sendSuccessMessage(sender, displayName, type, category, actuallyRemoved, item);
-        } else {
-            sendPrefixed(sender, "errors.player_has_no_stats");
         }
     }
 
@@ -218,10 +179,6 @@ public class RemovePlayerStatsCommand extends BaseCommand {
         return builder.buildFuture();
     }
 
-    /**
-     * Clase interna para resolver información de jugadores.
-     * Responsabilidad única: Encapsular datos de resolución de jugadores.
-     */
     private static class PlayerResolver {
         final UUID uuid;
         final String displayName;

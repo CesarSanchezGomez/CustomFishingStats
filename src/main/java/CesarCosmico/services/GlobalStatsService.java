@@ -8,6 +8,8 @@ import java.io.File;
 import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.logging.Logger;
 
 public class GlobalStatsService {
@@ -17,6 +19,7 @@ public class GlobalStatsService {
     private final boolean enableAutoSaveLog;
 
     private final Map<String, Map<String, Map<String, Integer>>> globalStats = new ConcurrentHashMap<>();
+    private final ReadWriteLock lock = new ReentrantReadWriteLock();
     private volatile boolean statsModified = false;
 
     public GlobalStatsService(Logger logger, File dataFolder, boolean enableAutoSaveLog) {
@@ -34,18 +37,23 @@ public class GlobalStatsService {
         String category = context.getCategory();
         int amount = context.getAmount();
 
-        Map<String, Map<String, Integer>> typeData = globalStats.computeIfAbsent(type,
-                k -> new ConcurrentHashMap<>());
-        Map<String, Integer> categoryData = typeData.computeIfAbsent(category,
-                k -> new ConcurrentHashMap<>());
+        lock.writeLock().lock();
+        try {
+            Map<String, Map<String, Integer>> typeData = globalStats.computeIfAbsent(type,
+                    k -> new ConcurrentHashMap<>());
+            Map<String, Integer> categoryData = typeData.computeIfAbsent(category,
+                    k -> new ConcurrentHashMap<>());
 
-        categoryData.merge("total", amount, Integer::sum);
+            categoryData.merge("total", amount, Integer::sum);
 
-        if (context.hasItem()) {
-            categoryData.merge(context.getItem(), amount, Integer::sum);
+            if (context.hasItem()) {
+                categoryData.merge(context.getItem(), amount, Integer::sum);
+            }
+
+            statsModified = true;
+        } finally {
+            lock.writeLock().unlock();
         }
-
-        statsModified = true;
     }
 
     public void decrement(TrackingContext context) {
@@ -53,24 +61,67 @@ public class GlobalStatsService {
         String category = context.getCategory();
         int amount = context.getAmount();
 
-        Map<String, Map<String, Integer>> typeData = globalStats.get(type);
-        if (typeData == null) return;
+        lock.writeLock().lock();
+        try {
+            Map<String, Map<String, Integer>> typeData = globalStats.get(type);
+            if (typeData == null) return;
 
-        Map<String, Integer> categoryData = typeData.get(category);
-        if (categoryData == null) return;
+            Map<String, Integer> categoryData = typeData.get(category);
+            if (categoryData == null) return;
 
-        categoryData.put("total", Math.max(0, categoryData.getOrDefault("total", 0) - amount));
+            int currentTotal = categoryData.getOrDefault("total", 0);
+            int newTotal = Math.max(0, currentTotal - amount);
 
-        if (context.hasItem()) {
-            String itemId = context.getItem();
-            categoryData.put(itemId, Math.max(0, categoryData.getOrDefault(itemId, 0) - amount));
-            if (categoryData.get(itemId) == 0) {
-                categoryData.remove(itemId);
+            if (newTotal > 0) {
+                categoryData.put("total", newTotal);
+            } else {
+                categoryData.remove("total");
             }
-        }
 
-        cleanupEmptyStats(type, category, typeData, categoryData);
-        statsModified = true;
+            if (context.hasItem()) {
+                String itemId = context.getItem();
+                int currentItem = categoryData.getOrDefault(itemId, 0);
+                int newItem = Math.max(0, currentItem - amount);
+
+                if (newItem > 0) {
+                    categoryData.put(itemId, newItem);
+                } else {
+                    categoryData.remove(itemId);
+                }
+            }
+
+            cleanupEmptyStats(type, category, typeData, categoryData);
+            statsModified = true;
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    public void incrementBatch(List<TrackingContext> contexts) {
+        if (contexts == null || contexts.isEmpty()) return;
+
+        lock.writeLock().lock();
+        try {
+            for (TrackingContext context : contexts) {
+                String type = context.getType();
+                String category = context.getCategory();
+                int amount = context.getAmount();
+
+                Map<String, Map<String, Integer>> typeData = globalStats.computeIfAbsent(type,
+                        k -> new ConcurrentHashMap<>());
+                Map<String, Integer> categoryData = typeData.computeIfAbsent(category,
+                        k -> new ConcurrentHashMap<>());
+
+                categoryData.merge("total", amount, Integer::sum);
+
+                if (context.hasItem()) {
+                    categoryData.merge(context.getItem(), amount, Integer::sum);
+                }
+            }
+            statsModified = true;
+        } finally {
+            lock.writeLock().unlock();
+        }
     }
 
     private void cleanupEmptyStats(String type, String category,
@@ -86,39 +137,64 @@ public class GlobalStatsService {
     }
 
     public int getCategoryTotal(String type, String category) {
-        Map<String, Map<String, Integer>> typeData = globalStats.get(type);
-        if (typeData == null) return 0;
-        Map<String, Integer> categoryData = typeData.get(category);
-        if (categoryData == null) return 0;
-        return categoryData.getOrDefault("total", 0);
+        lock.readLock().lock();
+        try {
+            Map<String, Map<String, Integer>> typeData = globalStats.get(type);
+            if (typeData == null) return 0;
+            Map<String, Integer> categoryData = typeData.get(category);
+            if (categoryData == null) return 0;
+            return categoryData.getOrDefault("total", 0);
+        } finally {
+            lock.readLock().unlock();
+        }
     }
 
     public Map<String, Integer> getCategoryItems(String type, String category) {
-        Map<String, Map<String, Integer>> typeData = globalStats.get(type);
-        if (typeData == null) return new HashMap<>();
-        Map<String, Integer> categoryData = typeData.get(category);
-        if (categoryData == null) return new HashMap<>();
-        Map<String, Integer> items = new HashMap<>(categoryData);
-        items.remove("total");
-        return items;
+        lock.readLock().lock();
+        try {
+            Map<String, Map<String, Integer>> typeData = globalStats.get(type);
+            if (typeData == null) return new HashMap<>();
+            Map<String, Integer> categoryData = typeData.get(category);
+            if (categoryData == null) return new HashMap<>();
+            Map<String, Integer> items = new HashMap<>(categoryData);
+            items.remove("total");
+            return items;
+        } finally {
+            lock.readLock().unlock();
+        }
     }
 
     public Set<String> getCategoriesByType(String type) {
-        Map<String, Map<String, Integer>> typeData = globalStats.get(type);
-        if (typeData == null) return new HashSet<>();
-        return new HashSet<>(typeData.keySet());
+        lock.readLock().lock();
+        try {
+            Map<String, Map<String, Integer>> typeData = globalStats.get(type);
+            if (typeData == null) return new HashSet<>();
+            return new HashSet<>(typeData.keySet());
+        } finally {
+            lock.readLock().unlock();
+        }
     }
 
     public Set<String> getAllTypes() {
-        return new HashSet<>(globalStats.keySet());
+        lock.readLock().lock();
+        try {
+            return new HashSet<>(globalStats.keySet());
+        } finally {
+            lock.readLock().unlock();
+        }
     }
 
     public int getTotalByType(String type) {
-        Map<String, Map<String, Integer>> typeData = globalStats.get(type);
-        if (typeData == null) return 0;
-        return typeData.values().stream()
-                .mapToInt(categoryData -> categoryData.getOrDefault("total", 0))
-                .sum();
+        lock.readLock().lock();
+        try {
+            Map<String, Map<String, Integer>> typeData = globalStats.get(type);
+            if (typeData == null) return 0;
+            return typeData.values().stream()
+                    .mapToInt(categoryData -> categoryData.getOrDefault("total", 0))
+                    .sum();
+        } finally {
+            lock.readLock().unlock();
+        }
     }
 
     public void load() {
@@ -130,12 +206,19 @@ public class GlobalStatsService {
         YamlConfiguration config = YamlConfiguration.loadConfiguration(globalStatsFile);
         ConfigurationSection contextsSection = config.getConfigurationSection("contexts");
 
-        if (contextsSection == null) {
-            loadLegacyFormat(config);
-            return;
-        }
+        lock.writeLock().lock();
+        try {
+            globalStats.clear();
 
-        loadHierarchicalFormat(contextsSection);
+            if (contextsSection == null) {
+                loadLegacyFormat(config);
+                return;
+            }
+
+            loadHierarchicalFormat(contextsSection);
+        } finally {
+            lock.writeLock().unlock();
+        }
     }
 
     private void loadHierarchicalFormat(ConfigurationSection contextsSection) {
@@ -200,50 +283,61 @@ public class GlobalStatsService {
     public void save() {
         File globalStatsFile = new File(storageFolder, "global_stats.yml");
         YamlConfiguration config = new YamlConfiguration();
-        ConfigurationSection contextsSection = config.createSection("contexts");
 
-        for (Map.Entry<String, Map<String, Map<String, Integer>>> typeEntry : globalStats.entrySet()) {
-            String type = typeEntry.getKey();
-            Map<String, Map<String, Integer>> typeData = typeEntry.getValue();
+        lock.readLock().lock();
+        try {
+            ConfigurationSection contextsSection = config.createSection("contexts");
 
-            ConfigurationSection typeSection = contextsSection.createSection(type);
+            for (Map.Entry<String, Map<String, Map<String, Integer>>> typeEntry : globalStats.entrySet()) {
+                String type = typeEntry.getKey();
+                Map<String, Map<String, Integer>> typeData = typeEntry.getValue();
 
-            for (Map.Entry<String, Map<String, Integer>> categoryEntry : typeData.entrySet()) {
-                String category = categoryEntry.getKey();
-                Map<String, Integer> categoryData = categoryEntry.getValue();
+                ConfigurationSection typeSection = contextsSection.createSection(type);
 
-                int total = categoryData.getOrDefault("total", 0);
-                Map<String, Integer> items = new HashMap<>(categoryData);
-                items.remove("total");
+                for (Map.Entry<String, Map<String, Integer>> categoryEntry : typeData.entrySet()) {
+                    String category = categoryEntry.getKey();
+                    Map<String, Integer> categoryData = categoryEntry.getValue();
 
-                if (total == 0 && items.isEmpty()) continue;
+                    int total = categoryData.getOrDefault("total", 0);
+                    Map<String, Integer> items = new HashMap<>(categoryData);
+                    items.remove("total");
 
-                ConfigurationSection categorySection = typeSection.createSection(category);
-                categorySection.set("total", total);
+                    if (total == 0 && items.isEmpty()) continue;
 
-                if (!items.isEmpty()) {
-                    ConfigurationSection itemsSection = categorySection.createSection("items");
-                    for (Map.Entry<String, Integer> itemEntry : items.entrySet()) {
-                        itemsSection.set(itemEntry.getKey(), itemEntry.getValue());
+                    ConfigurationSection categorySection = typeSection.createSection(category);
+                    categorySection.set("total", total);
+
+                    if (!items.isEmpty()) {
+                        ConfigurationSection itemsSection = categorySection.createSection("items");
+                        for (Map.Entry<String, Integer> itemEntry : items.entrySet()) {
+                            itemsSection.set(itemEntry.getKey(), itemEntry.getValue());
+                        }
                     }
                 }
             }
-        }
 
-        try {
             config.save(globalStatsFile);
             if (enableAutoSaveLog) {
                 logger.info("Global stats saved");
             }
         } catch (IOException e) {
             logger.severe("Failed to save global stats: " + e.getMessage());
+        } finally {
+            lock.readLock().unlock();
         }
     }
 
     public void autoSave() {
-        if (statsModified) {
-            save();
-            statsModified = false;
+        if (!statsModified) return;
+
+        lock.writeLock().lock();
+        try {
+            if (statsModified) {
+                save();
+                statsModified = false;
+            }
+        } finally {
+            lock.writeLock().unlock();
         }
     }
 }

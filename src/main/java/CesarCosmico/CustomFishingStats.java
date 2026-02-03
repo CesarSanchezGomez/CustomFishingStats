@@ -24,16 +24,8 @@ import org.bukkit.scheduler.BukkitTask;
 
 import java.io.File;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 
-/**
- * Plugin principal de CustomFishingStats.
- * Responsabilidad única: Coordinar la inicialización y ciclo de vida del plugin.
- *
- * Aplica:
- * - Single Responsibility: Solo coordina inicialización
- * - Dependency Inversion: Depende de abstracciones de servicios
- * - Open/Closed: Extensible mediante nuevos servicios
- */
 public class CustomFishingStats extends JavaPlugin {
 
     private BukkitCustomFishingPlugin customFishingPlugin;
@@ -52,7 +44,6 @@ public class CustomFishingStats extends JavaPlugin {
 
     private final Map<String, Set<String>> customFishingCategories = new HashMap<>();
 
-    // FIXED: Mantener referencia a los tasks para poder cancelarlos
     private BukkitTask autoSaveTask;
     private BukkitTask rankingCacheTask;
 
@@ -73,8 +64,12 @@ public class CustomFishingStats extends JavaPlugin {
     @Override
     public void onDisable() {
         unregisterFeatures();
-        cancelTasks(); // FIXED: Cancelar tasks al deshabilitar
+        cancelTasks();
         saveData();
+
+        if (rankingService != null) {
+            rankingService.shutdown();
+        }
     }
 
     private boolean initializeCustomFishing() {
@@ -173,9 +168,6 @@ public class CustomFishingStats extends JavaPlugin {
         }
     }
 
-    /**
-     * FIXED: Programa auto-save y guarda referencia al task
-     */
     private void scheduleAutoSave() {
         if (autoSaveTask != null && !autoSaveTask.isCancelled()) {
             autoSaveTask.cancel();
@@ -188,10 +180,6 @@ public class CustomFishingStats extends JavaPlugin {
                 autoSaveInterval);
     }
 
-    /**
-     * Auto-save unificado: guarda player data Y global stats al mismo tiempo
-     * OPTIMIZED: Una sola operación de I/O en lugar de dos separadas
-     */
     private void performUnifiedAutoSave() {
         boolean enableLog = configManager.getConfig().getBoolean("storage.auto-save.log", true);
 
@@ -207,11 +195,7 @@ public class CustomFishingStats extends JavaPlugin {
         }
     }
 
-    /**
-     * FIXED: Programa caché de rankings y guarda referencia al task
-     */
     private void scheduleRankingCache() {
-        // Cancelar task anterior si existe
         if (rankingCacheTask != null && !rankingCacheTask.isCancelled()) {
             rankingCacheTask.cancel();
         }
@@ -223,9 +207,6 @@ public class CustomFishingStats extends JavaPlugin {
                 cacheInterval);
     }
 
-    /**
-     * FIXED: Cancela todos los tasks programados
-     */
     private void cancelTasks() {
         if (autoSaveTask != null && !autoSaveTask.isCancelled()) {
             autoSaveTask.cancel();
@@ -250,10 +231,6 @@ public class CustomFishingStats extends JavaPlugin {
         }
     }
 
-    /**
-     * Registra stats de gameplay - cambios lazy (se guardan en auto-save)
-     * OPTIMIZED: No persiste inmediatamente, usa caché en memoria
-     */
     public void trackStats(Player player, TrackingContext context) {
         if (player != null) {
             storageManager.modifyOnlinePlayerDataLazy(player.getUniqueId(),
@@ -262,39 +239,96 @@ public class CustomFishingStats extends JavaPlugin {
                         return null;
                     });
         }
+
         globalStatsService.increment(context);
         rankingService.invalidateCategoryCache(context.getType(), context.getCategory());
     }
 
-    /**
-     * Actualiza stats globales y notifica al sistema de rankings
-     */
-    public void updateGlobalStats(TrackingContext context) {
-        globalStatsService.increment(context);
-        rankingService.invalidateCategoryCache(context.getType(), context.getCategory());
+    public CompletableFuture<Void> addStatsTransactional(UUID uuid, TrackingContext context) {
+        if (uuid == null) {
+            globalStatsService.increment(context);
+            rankingService.invalidateCategoryCache(context.getType(), context.getCategory());
+            return CompletableFuture.completedFuture(null);
+        }
+
+        return storageManager.modifyPlayerData(uuid, playerData -> {
+            playerData.addStats(context);
+            return null;
+        }).thenRun(() -> {
+            globalStatsService.increment(context);
+            rankingService.invalidateCategoryCache(context.getType(), context.getCategory());
+        });
     }
 
-    /**
-     * Decrementa stats globales y notifica al sistema de rankings
-     */
-    public void decrementGlobalStats(TrackingContext context) {
-        globalStatsService.decrement(context);
-        rankingService.invalidateCategoryCache(context.getType(), context.getCategory());
+    public CompletableFuture<Integer> removeStatsTransactional(UUID uuid, TrackingContext context) {
+        if (uuid == null) {
+            String type = context.getType();
+            String category = context.getCategory();
+            int requested = context.getAmount();
+
+            int current = context.hasItem()
+                    ? globalStatsService.getCategoryItems(type, category)
+                    .getOrDefault(context.getItem(), 0)
+                    : globalStatsService.getCategoryTotal(type, category);
+
+            int actuallyRemoved = Math.min(current, requested);
+
+            if (actuallyRemoved > 0) {
+                TrackingContext adjustedContext = TrackingContext.builder()
+                        .type(type)
+                        .category(category)
+                        .amount(actuallyRemoved)
+                        .item(context.hasItem() ? context.getItem() : null)
+                        .build();
+
+                globalStatsService.decrement(adjustedContext);
+                rankingService.invalidateCategoryCache(type, category);
+            }
+
+            return CompletableFuture.completedFuture(actuallyRemoved);
+        }
+
+        return storageManager.modifyPlayerData(uuid, playerData -> {
+            String type = context.getType();
+            String category = context.getCategory();
+            int requested = context.getAmount();
+
+            int current = context.hasItem()
+                    ? playerData.getItemAmount(type, category, context.getItem())
+                    : playerData.getCategoryTotal(type, category);
+
+            int actuallyRemoved = Math.min(current, requested);
+
+            if (actuallyRemoved > 0) {
+                TrackingContext adjustedContext = TrackingContext.builder()
+                        .type(type)
+                        .category(category)
+                        .amount(actuallyRemoved)
+                        .item(context.hasItem() ? context.getItem() : null)
+                        .build();
+
+                playerData.removeStats(adjustedContext);
+            }
+
+            return actuallyRemoved;
+        }).thenApply(actuallyRemoved -> {
+            if (actuallyRemoved > 0) {
+                TrackingContext adjustedContext = TrackingContext.builder()
+                        .type(context.getType())
+                        .category(context.getCategory())
+                        .amount(actuallyRemoved)
+                        .item(context.hasItem() ? context.getItem() : null)
+                        .build();
+
+                globalStatsService.decrement(adjustedContext);
+                rankingService.invalidateCategoryCache(context.getType(), context.getCategory());
+            }
+            return actuallyRemoved;
+        });
     }
 
-    /**
-     * Notifica cambios en datos de jugador específico
-     * CRITICAL: Invalida caché de rankings para ese jugador
-     */
     public void notifyPlayerDataChanged(UUID uuid) {
         rankingService.invalidatePlayerCache(uuid);
-    }
-
-    /**
-     * Invalida todo el caché de rankings
-     */
-    public void invalidateRankingCache() {
-        rankingService.clearCache();
     }
 
     public int getCategoryTotal(String type, String category) {
@@ -364,13 +398,7 @@ public class CustomFishingStats extends JavaPlugin {
         return actionManager;
     }
 
-    /**
-     * Recarga el plugin de forma segura sin perder datos
-     * CRITICAL: Guarda síncronamente antes de recargar configuraciones
-     * FIXED: Reprograma los tasks con nuevos intervalos
-     */
     public void reloadPlugin() {
-        // Guardar datos síncronamente primero
         if (storageManager != null) {
             storageManager.saveAllDataSync();
         }

@@ -9,14 +9,6 @@ import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
 
-/**
- * Comando administrativo para recargar la configuración del plugin.
- * Responsabilidad única: Gestionar la recarga del plugin de forma segura.
- *
- * Aplica:
- * - Single Responsibility: Solo gestiona reload
- * - Dependency Inversion: Depende de abstracciones del plugin
- */
 @SuppressWarnings("UnstableApiUsage")
 public class ReloadCommand extends BaseCommand implements Command<CommandSourceStack> {
 
@@ -30,17 +22,14 @@ public class ReloadCommand extends BaseCommand implements Command<CommandSourceS
 
         sendPrefixed(sender, "admin.reload.start");
 
-        // Ejecutar reload de forma asíncrona para no bloquear
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
                 plugin.reloadPlugin();
 
-                // Notificar éxito en el hilo principal
                 Bukkit.getScheduler().runTask(plugin, () ->
                         sendPrefixed(sender, "admin.reload.success")
                 );
             } catch (Exception e) {
-                // Notificar error en el hilo principal
                 Bukkit.getScheduler().runTask(plugin, () ->
                         sendPrefixed(sender, "admin.reload.error",
                                 Placeholder.parsed("error", e.getMessage()))

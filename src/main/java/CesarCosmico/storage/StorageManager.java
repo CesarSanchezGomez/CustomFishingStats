@@ -9,22 +9,12 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
-import org.bukkit.scheduler.BukkitTask;
 
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 
-/**
- * Gestor de almacenamiento de datos de jugadores.
- * Responsabilidad única: Gestionar la persistencia y caché de datos de jugadores.
- *
- * Aplica:
- * - Single Responsibility: Solo maneja persistencia y caché
- * - Open/Closed: Extensible mediante providers
- * - Dependency Inversion: Depende de abstracciones (YAMLProvider)
- */
 public class StorageManager implements Listener {
     private final CustomFishingStats plugin;
     private final YAMLProvider yamlStorage;
@@ -46,14 +36,8 @@ public class StorageManager implements Listener {
     }
 
     public void start() {
-        // No iniciamos auto-save aquí, se maneja centralmente en el plugin
     }
 
-    /**
-     * Auto-guardado: persiste SOLO jugadores online
-     * OPTIMIZED: No guarda jugadores offline del caché temporal
-     * También limpia el caché offline si crece demasiado
-     */
     private void performAutoSave() {
         if (!autoSaveLog) {
             pruneOfflineCache(100);
@@ -87,10 +71,6 @@ public class StorageManager implements Listener {
         });
     }
 
-    /**
-     * Ejecuta auto-save inmediatamente (llamado desde el plugin principal)
-     * EXPOSED: Para sincronizar con global stats save
-     */
     public void performAutoSaveNow() {
         performAutoSave();
     }
@@ -129,9 +109,6 @@ public class StorageManager implements Listener {
         }
     }
 
-    /**
-     * Carga datos del jugador desde caché o disco
-     */
     public CompletableFuture<PlayerData> loadPlayerData(UUID uuid) {
         PlayerData online = onlinePlayers.get(uuid);
         if (online != null) {
@@ -151,28 +128,17 @@ public class StorageManager implements Listener {
         });
     }
 
-    /**
-     * Modifica datos del jugador y asegura visibilidad inmediata en caché
-     * CRITICAL: Los cambios son visibles instantáneamente para placeholders y rankings
-     *
-     * Estrategia de guardado:
-     * - Jugadores ONLINE: Solo modifica caché, se guarda en auto-save
-     * - Jugadores OFFLINE: Modifica caché Y guarda inmediatamente (comandos admin)
-     */
     public <T> CompletableFuture<T> modifyPlayerData(UUID uuid, Function<PlayerData, T> modifier) {
         PlayerData online = onlinePlayers.get(uuid);
         if (online != null) {
-            // Jugador online: solo modificar caché, auto-save lo guardará
             return modifyAndNotify(uuid, online, modifier, false);
         }
 
         PlayerData offline = offlineCache.get(uuid);
         if (offline != null) {
-            // Jugador offline en caché: modificar y guardar inmediatamente
             return modifyAndNotify(uuid, offline, modifier, true);
         }
 
-        // Cargar desde disco, modificar y guardar
         return yamlStorage.loadPlayerData(uuid).thenCompose(playerData -> {
             if (playerData == null) {
                 String playerName = Bukkit.getOfflinePlayer(uuid).getName();
@@ -184,10 +150,6 @@ public class StorageManager implements Listener {
         });
     }
 
-    /**
-     * Modifica datos y notifica al sistema de rankings
-     * @param saveImmediately true para jugadores offline (comandos), false para online (gameplay)
-     */
     private <T> CompletableFuture<T> modifyAndNotify(UUID uuid, PlayerData playerData,
                                                      Function<PlayerData, T> modifier,
                                                      boolean saveImmediately) {
@@ -206,10 +168,6 @@ public class StorageManager implements Listener {
         }
     }
 
-    /**
-     * Modifica datos de jugador online sin persistir inmediatamente
-     * Los datos se guardarán en el próximo auto-save
-     */
     public void modifyOnlinePlayerDataLazy(UUID uuid, Function<PlayerData, Void> modifier) {
         PlayerData playerData = onlinePlayers.get(uuid);
         if (playerData != null) {
@@ -218,65 +176,26 @@ public class StorageManager implements Listener {
         }
     }
 
-    /**
-     * Obtiene snapshot de datos de jugador online (para rankings)
-     */
     public PlayerData getOnlinePlayerSnapshot(UUID uuid) {
         return onlinePlayers.get(uuid);
     }
 
-    /**
-     * Obtiene snapshot de datos de jugador offline en caché (para rankings)
-     */
     public PlayerData getOfflineCachedSnapshot(UUID uuid) {
         return offlineCache.get(uuid);
     }
 
-    /**
-     * Verifica si un jugador está en caché (online u offline)
-     */
-    public boolean isPlayerCached(UUID uuid) {
-        return onlinePlayers.containsKey(uuid) || offlineCache.containsKey(uuid);
-    }
-
-    /**
-     * Limpia caché de jugadores offline
-     * Útil para liberar memoria después de recalcular rankings
-     * OPTIMIZED: Mantiene solo los últimos N jugadores modificados
-     */
     public void clearOfflineCache() {
         offlineCache.clear();
     }
 
-    /**
-     * Limpia jugadores offline del caché que no han sido accedidos recientemente
-     * Mantiene memoria bajo control
-     */
     public void pruneOfflineCache(int maxSize) {
         if (offlineCache.size() <= maxSize) return;
 
-        // Si excede el tamaño, limpiar todo el caché offline
-        // Los datos importantes están guardados en disco
         offlineCache.clear();
     }
 
-    /**
-     * Limpia caché de un jugador offline específico
-     */
-    public void clearOfflinePlayerCache(UUID uuid) {
-        if (!onlinePlayers.containsKey(uuid)) {
-            offlineCache.remove(uuid);
-        }
-    }
-
-    /**
-     * Reload sin perder datos en memoria
-     * CRITICAL: Preserva caché de jugadores online durante reload
-     */
     public void reload() {
         loadConfig();
-        // NO limpiamos onlinePlayers ni offlineCache
-        // Los datos en memoria se mantienen intactos
     }
 
     public void disable() {

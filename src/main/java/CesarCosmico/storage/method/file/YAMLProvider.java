@@ -15,31 +15,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 
-/**
- * YAML Storage provider con sistema jerárquico de contextos
- * <p>
- * Estructura del archivo YAML:
- * <p>
- * name: "PlayerName"
- * contexts:
- *   recycling:
- *     singular:
- *       total: 21
- *       items:
- *         bambu: 21
- *     common:
- *       total: 28
- *       items:
- *         bambu: 28
- *   competition:
- *     suma_total:
- *       total: 11
- *   recovery:
- *     common:
- *       total: 12
- *       items:
- *         bambu: 12
- */
 public class YAMLProvider {
     private final Plugin plugin;
     private final File dataFolder;
@@ -52,9 +27,6 @@ public class YAMLProvider {
         }
     }
 
-    // ========================================
-    // LOAD
-    // ========================================
     public CompletableFuture<PlayerData> loadPlayerData(UUID uuid) {
         return CompletableFuture.supplyAsync(() -> {
             File playerFile = getPlayerFile(uuid);
@@ -75,9 +47,6 @@ public class YAMLProvider {
         });
     }
 
-    /**
-     * Cargar todos los contextos desde YAML con estructura jerárquica
-     */
     private void loadContexts(PlayerData playerData, YamlConfiguration config) {
         ConfigurationSection contextsSection = config.getConfigurationSection("contexts");
         if (contextsSection == null) return;
@@ -107,15 +76,11 @@ public class YAMLProvider {
         }
     }
 
-    // ========================================
-    // SAVE
-    // ========================================
     public CompletableFuture<Boolean> savePlayerData(PlayerData playerData) {
         return CompletableFuture.supplyAsync(() -> {
             try {
                 YamlConfiguration config = new YamlConfiguration();
                 config.set("name", playerData.getName());
-                // Guardar todos los contextos
                 saveContexts(playerData, config);
                 config.save(getPlayerFile(playerData.getUuid()));
                 return true;
@@ -127,9 +92,6 @@ public class YAMLProvider {
         });
     }
 
-    /**
-     * Guardar todos los contextos en YAML con estructura jerárquica
-     */
     private void saveContexts(PlayerData playerData, YamlConfiguration config) {
         ConfigurationSection contextsSection = config.createSection("contexts");
         Map<String, Map<String, Map<String, Integer>>> allStats = playerData.getStatsInternal();

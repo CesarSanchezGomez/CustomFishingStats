@@ -11,15 +11,6 @@ import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 
-/**
- * Comando administrativo para añadir estadísticas globales.
- * Responsabilidad única: Gestionar la adición de estadísticas globales del servidor.
- *
- * Aplica:
- * - Single Responsibility: Solo gestiona estadísticas globales de adición
- * - Open/Closed: Extendible sin modificar código existente
- * - Liskov Substitution: Puede sustituir a BaseCommand sin problemas
- */
 @SuppressWarnings("UnstableApiUsage")
 public class AddGlobalStatsCommand extends BaseCommand {
 
@@ -50,9 +41,16 @@ public class AddGlobalStatsCommand extends BaseCommand {
             int amount = ctx.getArgument("amount", Integer.class);
 
             TrackingContext context = buildTrackingContext(type, category, amount, item);
-            plugin.updateGlobalStats(context);
-            plugin.invalidateRankingCache();
-            sendSuccessMessage(ctx, type, category, amount, item);
+
+            plugin.addStatsTransactional(null, context)
+                    .thenRun(() -> {
+                        sendSuccessMessage(ctx, type, category, amount, item);
+                    })
+                    .exceptionally(throwable -> {
+                        plugin.getLogger().severe("Error adding global stats: " + throwable.getMessage());
+                        sendPrefixed(ctx.getSource().getSender(), "errors.operation_failed");
+                        return null;
+                    });
 
             return com.mojang.brigadier.Command.SINGLE_SUCCESS;
         } catch (Exception e) {

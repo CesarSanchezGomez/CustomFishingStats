@@ -16,15 +16,6 @@ import org.bukkit.entity.Player;
 
 import java.util.UUID;
 
-/**
- * Comando administrativo para añadir estadísticas a jugadores específicos.
- * Responsabilidad única: Gestionar la adición de estadísticas de jugadores individuales.
- *
- * Aplica:
- * - Single Responsibility: Solo gestiona adición de stats de jugadores
- * - Open/Closed: Extendible mediante nuevas estrategias de resolución
- * - Dependency Inversion: Depende de abstracciones del plugin
- */
 @SuppressWarnings("UnstableApiUsage")
 public class AddPlayerStatsCommand extends BaseCommand {
 
@@ -65,7 +56,17 @@ public class AddPlayerStatsCommand extends BaseCommand {
             }
 
             TrackingContext context = buildTrackingContext(type, category, amount, item);
-            updatePlayerStats(ctx, resolver, context, type, category, amount, item);
+
+            // FIXED: Uso de método transaccional
+            plugin.addStatsTransactional(resolver.uuid, context)
+                    .thenRun(() -> {
+                        sendSuccessMessage(ctx, resolver.displayName, type, category, amount, item);
+                    })
+                    .exceptionally(throwable -> {
+                        plugin.getLogger().severe("Error adding stats: " + throwable.getMessage());
+                        sendPrefixed(ctx.getSource().getSender(), "errors.operation_failed");
+                        return null;
+                    });
 
             return com.mojang.brigadier.Command.SINGLE_SUCCESS;
         } catch (Exception e) {
@@ -118,26 +119,6 @@ public class AddPlayerStatsCommand extends BaseCommand {
         return builder.build();
     }
 
-    private void updatePlayerStats(CommandContext<CommandSourceStack> ctx, PlayerResolver resolver,
-                                   TrackingContext context, String type, String category,
-                                   int amount, String item) {
-        plugin.getStorageManager().modifyPlayerData(resolver.uuid, data -> {
-            if (resolver.displayName != null && !resolver.displayName.equals(resolver.uuid.toString())) {
-                data.setName(resolver.displayName);
-            }
-            data.addStats(context);
-            return null;
-        }).thenAccept(result -> {
-            plugin.updateGlobalStats(context);
-            plugin.invalidateRankingCache();
-            sendSuccessMessage(ctx, resolver.displayName, type, category, amount, item);
-        }).exceptionally(throwable -> {
-            plugin.getLogger().severe("Error adding stats: " + throwable.getMessage());
-            sendPrefixed(ctx.getSource().getSender(), "errors.operation_failed");
-            return null;
-        });
-    }
-
     private void sendSuccessMessage(CommandContext<CommandSourceStack> ctx, String displayName,
                                     String type, String category, int amount, String item) {
         String path = (item != null) ? "admin.add.success_item" : "admin.add.success_category";
@@ -156,10 +137,6 @@ public class AddPlayerStatsCommand extends BaseCommand {
         plugin.getLogger().severe("Error adding player stats: " + e.getMessage());
     }
 
-    /**
-     * Clase interna para resolver información de jugadores.
-     * Responsabilidad única: Encapsular datos de resolución de jugadores.
-     */
     private static class PlayerResolver {
         final UUID uuid;
         final String displayName;

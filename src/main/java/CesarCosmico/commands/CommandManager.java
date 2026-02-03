@@ -6,10 +6,6 @@ import com.mojang.brigadier.tree.LiteralCommandNode;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
 
-/**
- * Gestor central de comandos del plugin.
- * Responsabilidad única: Registrar y organizar la estructura de comandos.
- */
 public class CommandManager {
 
     private final CustomFishingStats plugin;
