@@ -1,6 +1,6 @@
 package CesarCosmico;
 
-import CesarCosmico.actions.TrackingAction;
+import CesarCosmico.actions.FishingStatAction;
 import CesarCosmico.commands.CommandManager;
 import CesarCosmico.config.ConfigManager;
 import CesarCosmico.config.DisplayNamesManager;
@@ -9,7 +9,7 @@ import CesarCosmico.placeholderapi.FishingStatsExpansion;
 import CesarCosmico.services.GlobalStatsService;
 import CesarCosmico.services.RankingService;
 import CesarCosmico.storage.StorageManager;
-import CesarCosmico.tracking.TrackingContext;
+import CesarCosmico.actions.FishingStatContext;
 import io.papermc.paper.plugin.lifecycle.event.LifecycleEventManager;
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import net.momirealms.customfishing.api.BukkitCustomFishingPlugin;
@@ -39,7 +39,7 @@ public class CustomFishingStats extends JavaPlugin {
     private DisplayNamesManager displayNamesManager;
     private RankingService rankingService;
 
-    private TrackingAction trackingAction;
+    private FishingStatAction fishingStatAction;
     private FishingStatsExpansion papiExpansion;
 
     private final Map<String, Set<String>> customFishingCategories = new HashMap<>();
@@ -146,8 +146,8 @@ public class CustomFishingStats extends JavaPlugin {
     }
 
     private void registerTrackingAction() {
-        this.trackingAction = new TrackingAction(this);
-        trackingAction.register();
+        this.fishingStatAction = new FishingStatAction(this);
+        fishingStatAction.register();
     }
 
     private void registerCommands() {
@@ -231,7 +231,7 @@ public class CustomFishingStats extends JavaPlugin {
         }
     }
 
-    public void trackStats(Player player, TrackingContext context) {
+    public void trackStats(Player player, FishingStatContext context) {
         if (player != null) {
             storageManager.modifyOnlinePlayerDataLazy(player.getUniqueId(),
                     playerData -> {
@@ -244,7 +244,7 @@ public class CustomFishingStats extends JavaPlugin {
         rankingService.invalidateCategoryCache(context.getType(), context.getCategory());
     }
 
-    public CompletableFuture<Void> addStatsTransactional(UUID uuid, TrackingContext context) {
+    public CompletableFuture<Void> addStatsTransactional(UUID uuid, FishingStatContext context) {
         if (uuid == null) {
             globalStatsService.increment(context);
             rankingService.invalidateCategoryCache(context.getType(), context.getCategory());
@@ -260,7 +260,7 @@ public class CustomFishingStats extends JavaPlugin {
         });
     }
 
-    public CompletableFuture<Integer> removeStatsTransactional(UUID uuid, TrackingContext context) {
+    public CompletableFuture<Integer> removeStatsTransactional(UUID uuid, FishingStatContext context) {
         if (uuid == null) {
             String type = context.getType();
             String category = context.getCategory();
@@ -274,7 +274,7 @@ public class CustomFishingStats extends JavaPlugin {
             int actuallyRemoved = Math.min(current, requested);
 
             if (actuallyRemoved > 0) {
-                TrackingContext adjustedContext = TrackingContext.builder()
+                FishingStatContext adjustedContext = FishingStatContext.builder()
                         .type(type)
                         .category(category)
                         .amount(actuallyRemoved)
@@ -300,7 +300,7 @@ public class CustomFishingStats extends JavaPlugin {
             int actuallyRemoved = Math.min(current, requested);
 
             if (actuallyRemoved > 0) {
-                TrackingContext adjustedContext = TrackingContext.builder()
+                FishingStatContext adjustedContext = FishingStatContext.builder()
                         .type(type)
                         .category(category)
                         .amount(actuallyRemoved)
@@ -313,7 +313,7 @@ public class CustomFishingStats extends JavaPlugin {
             return actuallyRemoved;
         }).thenApply(actuallyRemoved -> {
             if (actuallyRemoved > 0) {
-                TrackingContext adjustedContext = TrackingContext.builder()
+                FishingStatContext adjustedContext = FishingStatContext.builder()
                         .type(context.getType())
                         .category(context.getCategory())
                         .amount(actuallyRemoved)

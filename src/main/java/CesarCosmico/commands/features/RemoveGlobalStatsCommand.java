@@ -2,7 +2,7 @@ package CesarCosmico.commands.features;
 
 import CesarCosmico.CustomFishingStats;
 import CesarCosmico.commands.BaseCommand;
-import CesarCosmico.tracking.TrackingContext;
+import CesarCosmico.actions.FishingStatContext;
 import com.mojang.brigadier.Command;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
@@ -52,7 +52,7 @@ public class RemoveGlobalStatsCommand extends BaseCommand {
             String category = ctx.getArgument("category", String.class);
             int requestedAmount = ctx.getArgument("amount", Integer.class);
 
-            TrackingContext context = buildTrackingContext(type, category, requestedAmount, item);
+            FishingStatContext context = buildTrackingContext(type, category, requestedAmount, item);
 
             plugin.removeStatsTransactional(null, context)
                     .thenAccept(actuallyRemoved -> {
@@ -75,8 +75,8 @@ public class RemoveGlobalStatsCommand extends BaseCommand {
         }
     }
 
-    private TrackingContext buildTrackingContext(String type, String category, int amount, String item) {
-        TrackingContext.Builder builder = TrackingContext.builder()
+    private FishingStatContext buildTrackingContext(String type, String category, int amount, String item) {
+        FishingStatContext.Builder builder = FishingStatContext.builder()
                 .type(type)
                 .category(category)
                 .amount(amount);

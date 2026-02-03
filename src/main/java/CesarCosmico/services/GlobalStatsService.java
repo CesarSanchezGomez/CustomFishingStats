@@ -1,6 +1,6 @@
 package CesarCosmico.services;
 
-import CesarCosmico.tracking.TrackingContext;
+import CesarCosmico.actions.FishingStatContext;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 
@@ -32,7 +32,7 @@ public class GlobalStatsService {
         }
     }
 
-    public void increment(TrackingContext context) {
+    public void increment(FishingStatContext context) {
         String type = context.getType();
         String category = context.getCategory();
         int amount = context.getAmount();
@@ -56,7 +56,7 @@ public class GlobalStatsService {
         }
     }
 
-    public void decrement(TrackingContext context) {
+    public void decrement(FishingStatContext context) {
         String type = context.getType();
         String category = context.getCategory();
         int amount = context.getAmount();

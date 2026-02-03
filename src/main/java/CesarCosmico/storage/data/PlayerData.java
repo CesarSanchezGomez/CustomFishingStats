@@ -1,6 +1,6 @@
 package CesarCosmico.storage.data;
 
-import CesarCosmico.tracking.TrackingContext;
+import CesarCosmico.actions.FishingStatContext;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -21,7 +21,7 @@ public class PlayerData {
         this.typeTotalCache = new ConcurrentHashMap<>();
     }
 
-    public void addStats(TrackingContext context) {
+    public void addStats(FishingStatContext context) {
         String type = context.getType();
         String category = context.getCategory();
         int amount = context.getAmount();
@@ -41,7 +41,7 @@ public class PlayerData {
         typeTotalCache.remove(type);
     }
 
-    public void removeStats(TrackingContext context) {
+    public void removeStats(FishingStatContext context) {
         String type = context.getType();
         String category = context.getCategory();
         int amount = context.getAmount();

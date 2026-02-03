@@ -2,7 +2,7 @@ package CesarCosmico.commands.features;
 
 import CesarCosmico.CustomFishingStats;
 import CesarCosmico.commands.BaseCommand;
-import CesarCosmico.tracking.TrackingContext;
+import CesarCosmico.actions.FishingStatContext;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
@@ -40,7 +40,7 @@ public class AddGlobalStatsCommand extends BaseCommand {
             String category = ctx.getArgument("category", String.class);
             int amount = ctx.getArgument("amount", Integer.class);
 
-            TrackingContext context = buildTrackingContext(type, category, amount, item);
+            FishingStatContext context = buildTrackingContext(type, category, amount, item);
 
             plugin.addStatsTransactional(null, context)
                     .thenRun(() -> {
@@ -59,8 +59,8 @@ public class AddGlobalStatsCommand extends BaseCommand {
         }
     }
 
-    private TrackingContext buildTrackingContext(String type, String category, int amount, String item) {
-        TrackingContext.Builder builder = TrackingContext.builder()
+    private FishingStatContext buildTrackingContext(String type, String category, int amount, String item) {
+        FishingStatContext.Builder builder = FishingStatContext.builder()
                 .type(type)
                 .category(category)
                 .amount(amount);

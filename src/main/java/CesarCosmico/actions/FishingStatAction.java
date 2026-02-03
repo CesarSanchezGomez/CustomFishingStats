@@ -1,7 +1,6 @@
 package CesarCosmico.actions;
 
 import CesarCosmico.CustomFishingStats;
-import CesarCosmico.tracking.TrackingContext;
 import net.momirealms.customfishing.api.mechanic.action.Action;
 import net.momirealms.customfishing.api.mechanic.context.Context;
 import net.momirealms.customfishing.api.mechanic.misc.value.MathValue;
@@ -21,12 +20,12 @@ import java.util.List;
  * - Open/Closed: Extensible mediante nuevos tipos de tracking
  * - Dependency Inversion: Depende de CustomFishingStats abstracto
  */
-public class TrackingAction {
-    private static final String ACTION_NAME = "track-fishing-stat";
+public class FishingStatAction {
+    private static final String ACTION_NAME = "fishing-stat";
 
     private final CustomFishingStats plugin;
 
-    public TrackingAction(CustomFishingStats plugin) {
+    public FishingStatAction(CustomFishingStats plugin) {
         this.plugin = plugin;
     }
 
@@ -38,7 +37,7 @@ public class TrackingAction {
             }
 
             Section section = (Section) args;
-            List<TrackingContext> contexts = parseContexts(section);
+            List<FishingStatContext> contexts = parseContexts(section);
 
             if (contexts.isEmpty()) {
                 return Action.empty();
@@ -50,7 +49,7 @@ public class TrackingAction {
         }, ACTION_NAME);
     }
 
-    private List<TrackingContext> parseContexts(Section section) {
+    private List<FishingStatContext> parseContexts(Section section) {
         String type = section.getString("type");
         if (type == null || type.isEmpty()) {
             logWarning("requires 'type' parameter (competition, event, recycling, etc.)");
@@ -99,11 +98,11 @@ public class TrackingAction {
         return Collections.singletonList(category);
     }
 
-    private List<TrackingContext> buildContexts(String type, List<String> categories, int amount, String item) {
-        List<TrackingContext> contexts = new ArrayList<>();
+    private List<FishingStatContext> buildContexts(String type, List<String> categories, int amount, String item) {
+        List<FishingStatContext> contexts = new ArrayList<>();
 
         for (String category : categories) {
-            TrackingContext.Builder builder = TrackingContext.builder()
+            FishingStatContext.Builder builder = FishingStatContext.builder()
                     .type(type)
                     .category(category)
                     .amount(amount);
@@ -122,7 +121,7 @@ public class TrackingAction {
      * Crea la acción que se ejecutará cuando se cumplan las condiciones
      * OPTIMIZED: Usa trackStats que no persiste inmediatamente
      */
-    private Action<Player> createAction(List<TrackingContext> contexts, boolean globalOnly, MathValue<Player> chance) {
+    private Action<Player> createAction(List<FishingStatContext> contexts, boolean globalOnly, MathValue<Player> chance) {
         return (Context<Player> ctxPlayer) -> {
             if (Math.random() > chance.evaluate(ctxPlayer)) {
                 return;
@@ -130,7 +129,7 @@ public class TrackingAction {
 
             Player player = globalOnly ? null : ctxPlayer.holder();
 
-            for (TrackingContext context : contexts) {
+            for (FishingStatContext context : contexts) {
                 plugin.trackStats(player, context);
             }
         };

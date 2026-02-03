@@ -1,14 +1,14 @@
-package CesarCosmico.tracking;
+package CesarCosmico.actions;
 
 import java.util.Objects;
 
-public class TrackingContext {
+public class FishingStatContext {
     private final String type;
     private final String category;
     private final String item;
     private final int amount;
 
-    private TrackingContext(Builder builder) {
+    private FishingStatContext(Builder builder) {
         this.type = builder.type;
         this.category = builder.category;
         this.item = builder.item;
@@ -61,10 +61,10 @@ public class TrackingContext {
             return this;
         }
 
-        public TrackingContext build() {
+        public FishingStatContext build() {
             Objects.requireNonNull(type, "Type cannot be null");
             Objects.requireNonNull(category, "Category cannot be null");
-            return new TrackingContext(this);
+            return new FishingStatContext(this);
         }
     }
 
@@ -75,10 +75,10 @@ public class TrackingContext {
     @Override
     public String toString() {
         if (hasItem()) {
-            return String.format("TrackingContext{type=%s, category=%s, item=%s, amount=%d}",
+            return String.format("FishingStatContext{type=%s, category=%s, item=%s, amount=%d}",
                     type, category, item, amount);
         }
-        return String.format("TrackingContext{type=%s, category=%s, amount=%d (generic points)}",
+        return String.format("FishingStatContext{type=%s, category=%s, amount=%d (generic points)}",
                 type, category, amount);
     }
 }
