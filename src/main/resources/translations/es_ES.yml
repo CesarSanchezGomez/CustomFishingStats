@@ -1,0 +1,87 @@
+# CustomFishingStats Messages
+# MiniMessage format: https://docs.advntr.dev/minimessage/format.html
+
+prefix: '<white>[</white><gradient:#93EDC7:#1CD8D2>FishingStats</gradient><white>]</white>'
+
+# ==========================================
+# HELP COMMAND
+# ==========================================
+help:
+  display:
+    - '<gradient:#93EDC7:#1CD8D2>◤<st>                 </st> <white>[</white><gradient:#93EDC7:#1CD8D2>EdoPesca</gradient><white>]</white> <st>                 </st>◥</gradient>'
+    - ''
+    - ' <white>• <gradient:#93EDC7:#1CD8D2>/pescastats</gradient> help</white>'
+    - '     <gray>Muestra este menú de ayuda</gray>'
+    - ''
+    - ' <white>• <gradient:#93EDC7:#1CD8D2>/pescastats</gradient> top <type> <categories></white>'
+    - '     <gray>Rankings de pesca</gray>'
+    - ''
+    - '<gradient:#93EDC7:#1CD8D2>◣<st>                                                  </st>◢</gradient>'
+
+# ==========================================
+# ADMIN COMMANDS
+# ==========================================
+admin:
+  reload:
+    start: 'Recargando configuración...'
+    success: '¡Configuración recargada exitosamente!'
+    error: '<red>Error al recargar: <error></red>'
+
+  add:
+    success_item: '<green>✓ Añadidas <amount> unidades de <yellow><item></yellow> (<type>/<category>) a <player></green>'
+    success_category: '<green>✓ Añadidos <amount> puntos de <type>/<category> a <player></green>'
+    success_global_item: '<green>✓ Añadidas <amount> unidades de <yellow><item></yellow> (<type>/<category>) a estadísticas globales</green>'
+    success_global_category: '<green>✓ Añadidos <amount> puntos de <type>/<category> a estadísticas globales</green>'
+    warning_new_player: '<yellow>⚠ El jugador <player> nunca ha entrado al servidor. Los stats se aplicarán cuando entre.</yellow>'
+
+  remove:
+    success_item: '<green>✓ Removidas <amount> unidades de <yellow><item></yellow> (<type>/<category>) de <player></green>'
+    success_category: '<green>✓ Removidos <amount> puntos de <type>/<category> de <player></green>'
+    success_global_item: '<green>✓ Removidas <amount> unidades de <yellow><item></yellow> (<type>/<category>) de estadísticas globales</green>'
+    success_global_category: '<green>✓ Removidos <amount> puntos de <type>/<category> de estadísticas globales</green>'
+
+# ==========================================
+# ERRORS
+# ==========================================
+errors:
+  invalid_type: '<red>✗ Tipo inválido. Verifica el tipo que estás usando.</red>'
+  invalid_category: '<red>✗ Categoría inválida. Verifica la categoría que estás usando.</red>'
+  no_permission: '<red>✗ No tienes permiso para usar este comando.</red>'
+  player_only: '<red>✗ Este comando solo puede ser usado por jugadores.</red>'
+  player_not_found: '<red>✗ Jugador no encontrado.</red>'
+  player_never_joined: '<red>✗ El jugador <player> nunca ha entrado al servidor. Usa su UUID en su lugar.</red>'
+  player_has_no_stats: '<red>✗ El jugador no tiene suficientes stats para remover.</red>'
+  global_has_no_stats: '<red>✗ Las estadísticas globales no tienen suficientes puntos para remover.</red>'
+  operation_failed: '<red>✗ La operación falló. Revisa los logs.</red>'
+  unknown_error: '<red>✗ Ocurrió un error inesperado: <error></red>'
+
+# ==========================================
+# TOP COMMAND
+# ==========================================
+top:
+  display:
+    - ''
+    - '<gradient:#93EDC7:#1CD8D2>◤<st>                 </st> <white>[</white><gradient:#93EDC7:#1CD8D2>EdoPesca</gradient><white>]</white> <st>                 </st>◥</gradient>'
+    - ''
+    - ' <type> - <gradient:#93EDC7:#1CD8D2><bold><category></bold></gradient> '
+    - ''
+    - '<entries>'
+    - ''
+    - '<gradient:#93EDC7:#1CD8D2>◣<st>                </st></gradient> <previous_page><gray> | </gray><white><current>/<total></white><gray> | </gray><next_page> <gradient:#93EDC7:#1CD8D2><st>                </st>◢</gradient>'
+    - ''
+
+  entry: '  <gray>• <rank></gray> <player_head> <white><player></white> <dark_gray>-</dark_gray> <gold><score></gold> Pts.'
+
+  navigation:
+    previous: '<gradient:#93EDC7:#1CD8D2>«</gradient>'
+    previous_disabled: '<dark_gray>«</dark_gray>'
+    previous_hover: '<gray>Click para ir a la página <page></gray>'
+
+    next: '<gradient:#93EDC7:#1CD8D2>»</gradient>'
+    next_disabled: '<dark_gray>»</dark_gray>'
+    next_hover: '<gray>Click para ir a la página <page></gray>'
+
+  no_data: '<red>No hay datos registrados para <white><type></white> - <white><category></white></red>'
+  invalid_page: '<red>La página <white><page></white> no existe. Máximo: <white><max_page></white></red>'
+  invalid_type: '<red>El tipo <white><type></white> no existe.</red>'
+  invalid_category: '<red>La categoría <white><category></white> no existe en el tipo <white><type></white>.</red>'

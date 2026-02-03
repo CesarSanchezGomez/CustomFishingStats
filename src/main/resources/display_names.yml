@@ -1,0 +1,80 @@
+# Formato:
+# types:
+#   key_tecnica: "<formato_minimessage>Nombre Mostrado"
+#
+# categories:
+#   key_tecnica: "<formato_minimessage>Nombre Mostrado"
+#
+# Si una key no está definida aquí, se mostrará con la key técnica original
+
+types:
+  competition: "<bold>Competición</bold>"
+  recycling: "<bold>Reciclaje</bold>"
+  recovery: "<bold>Recuperación</bold>"
+  category: "<bold>Pesca</bold>"
+
+categories:
+  # Reciclaje | Recuperación | Pesca
+  common_items: <gradient:#D3D3D3:#A0A0A0>Común</gradient>
+  singular_items: <gradient:#FF7373:#FF0D0D>Singular</gradient>
+  rare_items: <gradient:#FEF0B1:#FDE211>Raro</gradient>
+  epic_items: <gradient:#98BE85:#4D8E2D>Épico</gradient>
+  legendary_items: <gradient:#7373FF:#0D0DFF>Legendario</gradient>
+  mythic_items: <gradient:#C173FF:#950DFF>Mítico</gradient>
+  divine_items: <gradient:#FCBDE3:#F973C4>Divino</gradient>
+
+  # Pesca
+  common_fishes: <gradient:#D3D3D3:#A0A0A0>Común</gradient>
+  singular_fishes: <gradient:#FF7373:#FF0D0D>Singular</gradient>
+  rare_fishes: <gradient:#FEF0B1:#FDE211>Raro</gradient>
+  epic_fishes: <gradient:#98BE85:#4D8E2D>Épico</gradient>
+  legendary_fishes: <gradient:#7373FF:#0D0DFF>Legendario</gradient>
+  mythic_fishes: <gradient:#C173FF:#950DFF>Mítico</gradient>
+  divine_fishes: <gradient:#FCBDE3:#F973C4>Divino</gradient>
+
+  edovalentine: <gradient:#FF7373:#FF0D0D>EdoValentine</gradient>
+  edocarnival: <gradient:#B4E488:#7DD031>EdoCarnival</gradient>
+  edospring: <gradient:#A8FF78:#78FFD6>EdoSpring</gradient>
+  edospring_rabbits: <gradient:#A8FF78:#78FFD6>Conejos EdoSpring</gradient>
+  edosummer: <gradient:#FEF0B1:#FDE211>EdoSummer</gradient>
+  edosummer_icencream: <gradient:#FEF0B1:#FDE211>EdoSummer Polos y Conos</gradient>
+  edoween: <gradient:#FFB473:#FF7E0D>EdoWeen</gradient>
+  edoxmas: <gradient:#A6F6FF:#0ED2F7>EdoXmas</gradient>
+  edoxmas_ornaments: <gradient:#A6F6FF:#0ED2F7>Ornamentos EdoXmas</gradient>
+
+  regional: <gradient:#B99673:#864A0D>Regional</gradient>
+  pirate_treasure: <gradient:#FBAA14:#FEF882:#FBAA14:#FEF882:#FBAA14>Tesoro pirata</gradient>
+  edobirthday: <gradient:#fffdfe:#d5c8ac>EdoBirthday</gradient>
+
+  # Competiciones
+  top_one: TOP 1
+  top_two: TOP 2
+  top_three: TOP 3
+
+  participation: Participaciones
+  participation_max_size: Participaciones
+  participation_min_size: Participaciones
+  paticipation_total_size: Participaciones
+  participation_infernal: Participaciones
+
+  max_size_top_one: Más grande TOP 1
+  max_size_top_two: Más grande TOP 2
+  max_size_top_three: Más grande TOP 3
+  min_size_top_one: Más pequeño TOP 1
+  min_size_top_one_two: Más pequeño TOP 2
+  min_size_top_three: Más pequeño TOP 3
+
+  total_size_top_one: Suma total TOP 1
+  total_size_top_two: Suma total TOP 2
+  total_size_top_three: Suma total TOP 3
+
+  infernal_top_one: Infernal TOP 1
+  infernal_top_two: Infernal TOP 2
+  infernal_top_three: Infernal TOP 3
+
+  # Todo
+  all: "<gradient:#93EDC7:#1CD8D2><bold>GENERAL</bold></gradient>"
+
+fallback:
+  type_format: "<white><key></white>"
+  category_format: "<gray><key></gray>"

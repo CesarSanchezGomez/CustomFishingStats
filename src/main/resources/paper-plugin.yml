@@ -1,0 +1,59 @@
+name: CustomFishingStats
+version: '1.0.0'
+main: CesarCosmico.CustomFishingStats
+description: Sistema avanzado de estadísticas para CustomFishing con rankings y tracking detallado
+api-version: '1.21'
+
+dependencies:
+  server:
+    CustomFishing:
+      load: BEFORE
+      required: true
+      join-classpath: true
+
+permissions:
+  customfishingstats.*:
+    description: Acceso completo a todas las funcionalidades del plugin
+    default: op
+    children:
+      customfishingstats.help: true
+      customfishingstats.top: true
+      customfishingstats.admin: true
+
+  customfishingstats.help:
+    description: Permite ver la ayuda del plugin
+    default: true
+
+  customfishingstats.top:
+    description: Permite ver los rankings de estadísticas
+    default: true
+
+  customfishingstats.admin:
+    description: Acceso completo a todos los comandos administrativos
+    default: op
+    children:
+      customfishingstats.admin.reload: true
+      customfishingstats.admin.addplayer: true
+      customfishingstats.admin.removeplayer: true
+      customfishingstats.admin.addglobal: true
+      customfishingstats.admin.removeglobal: true
+
+  customfishingstats.admin.reload:
+    description: Permite recargar la configuración del plugin
+    default: op
+
+  customfishingstats.admin.addplayer:
+    description: Permite añadir estadísticas a jugadores específicos
+    default: op
+
+  customfishingstats.admin.removeplayer:
+    description: Permite remover estadísticas de jugadores específicos
+    default: op
+
+  customfishingstats.admin.addglobal:
+    description: Permite añadir estadísticas globales del servidor
+    default: op
+
+  customfishingstats.admin.removeglobal:
+    description: Permite remover estadísticas globales del servidor
+    default: op

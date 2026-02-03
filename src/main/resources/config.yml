@@ -1,0 +1,7 @@
+language: en_US
+
+storage:
+  auto-save:
+    enabled: true
+    interval: 300
+    log: true    

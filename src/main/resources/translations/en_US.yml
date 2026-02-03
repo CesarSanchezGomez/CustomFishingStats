@@ -1,0 +1,87 @@
+# CustomFishingStats Messages
+# MiniMessage format: https://docs.advntr.dev/minimessage/format.html
+
+prefix: '<white>[</white><gradient:#93EDC7:#1CD8D2>FishingStats</gradient><white>]</white>'
+
+# ==========================================
+# HELP COMMAND
+# ==========================================
+help:
+  display:
+    - '<gradient:#93EDC7:#1CD8D2>◤<st>                 </st> <white>[</white><gradient:#93EDC7:#1CD8D2>EdoPesca</gradient><white>]</white> <st>                 </st>◥</gradient>'
+    - ''
+    - ' <white>• <gradient:#93EDC7:#1CD8D2>/pescastats</gradient> help</white>'
+    - '     <gray>Displays this help menu</gray>'
+    - ''
+    - ' <white>• <gradient:#93EDC7:#1CD8D2>/pescastats</gradient> top <type> <categories></white>'
+    - '     <gray>Fishing rankings</gray>'
+    - ''
+    - '<gradient:#93EDC7:#1CD8D2>◣<st>                                                  </st>◢</gradient>'
+
+# ==========================================
+# ADMIN COMMANDS
+# ==========================================
+admin:
+  reload:
+    start: 'Reloading configuration...'
+    success: 'Configuration reloaded successfully!'
+    error: '<red>Error while reloading: <error></red>'
+
+  add:
+    success_item: '<green>✓ Added <amount> units of <yellow><item></yellow> (<type>/<category>) to <player></green>'
+    success_category: '<green>✓ Added <amount> points of <type>/<category> to <player></green>'
+    success_global_item: '<green>✓ Added <amount> units of <yellow><item></yellow> (<type>/<category>) to global statistics</green>'
+    success_global_category: '<green>✓ Added <amount> points of <type>/<category> to global statistics</green>'
+    warning_new_player: '<yellow>⚠ Player <player> has never joined the server. Stats will be applied when they join.</yellow>'
+
+  remove:
+    success_item: '<green>✓ Removed <amount> units of <yellow><item></yellow> (<type>/<category>) from <player></green>'
+    success_category: '<green>✓ Removed <amount> points of <type>/<category> from <player></green>'
+    success_global_item: '<green>✓ Removed <amount> units of <yellow><item></yellow> (<type>/<category>) from global statistics</green>'
+    success_global_category: '<green>✓ Removed <amount> points of <type>/<category> from global statistics</green>'
+
+# ==========================================
+# ERRORS
+# ==========================================
+errors:
+  invalid_type: '<red>✗ Invalid type. Please verify the type you are using.</red>'
+  invalid_category: '<red>✗ Invalid category. Please verify the category you are using.</red>'
+  no_permission: '<red>✗ You do not have permission to use this command.</red>'
+  player_only: '<red>✗ This command can only be used by players.</red>'
+  player_not_found: '<red>✗ Player not found.</red>'
+  player_never_joined: '<red>✗ Player <player> has never joined the server. Use their UUID instead.</red>'
+  player_has_no_stats: '<red>✗ The player does not have enough stats to remove.</red>'
+  global_has_no_stats: '<red>✗ Global statistics do not have enough points to remove.</red>'
+  operation_failed: '<red>✗ The operation failed. Check the logs.</red>'
+  unknown_error: '<red>✗ An unexpected error occurred: <error></red>'
+
+# ==========================================
+# TOP COMMAND
+# ==========================================
+top:
+  display:
+    - ''
+    - '<gradient:#93EDC7:#1CD8D2>◤<st>                 </st> <white>[</white><gradient:#93EDC7:#1CD8D2>EdoPesca</gradient><white>]</white> <st>                 </st>◥</gradient>'
+    - ''
+    - ' <type> - <gradient:#93EDC7:#1CD8D2><bold><category></bold></gradient> '
+    - ''
+    - '<entries>'
+    - ''
+    - '<gradient:#93EDC7:#1CD8D2>◣<st>                </st></gradient> <previous_page><gray> | </gray><white><current>/<total></white><gray> | </gray><next_page> <gradient:#93EDC7:#1CD8D2><st>                </st>◢</gradient>'
+    - ''
+
+  entry: '  <gray>• <rank></gray> <player_head> <white><player></white> <dark_gray>-</dark_gray> <gold><score></gold> Pts.'
+
+  navigation:
+    previous: '<gradient:#93EDC7:#1CD8D2>«</gradient>'
+    previous_disabled: '<dark_gray>«</dark_gray>'
+    previous_hover: '<gray>Click to go to page <page></gray>'
+
+    next: '<gradient:#93EDC7:#1CD8D2>»</gradient>'
+    next_disabled: '<dark_gray>»</dark_gray>'
+    next_hover: '<gray>Click to go to page <page></gray>'
+
+  no_data: '<red>No data recorded for <white><type></white> - <white><category></white></red>'
+  invalid_page: '<red>Page <white><page></white> does not exist. Maximum: <white><max_page></white></red>'
+  invalid_type: '<red>Type <white><type></white> does not exist.</red>'
+  invalid_category: '<red>Category <white><category></white> does not exist in type <white><type></white>.</red>'
