@@ -19,6 +19,7 @@ public class CommandManager {
                 .executes(new HelpCommand(plugin))
                 .then(createHelpCommand())
                 .then(TopCommand.create(plugin))
+                .then(GlobalStatsCommand.create(plugin))
                 .then(createAdminCommands())
                 .build();
     }

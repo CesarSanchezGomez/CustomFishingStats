@@ -157,6 +157,16 @@ public class GlobalStatsService {
         }
     }
 
+    public boolean isGlobalOnlyCategory(String type, String category) {
+        if (!type.equals("competition")) {
+            return false;
+        }
+
+        return category.endsWith("_count") ||
+                category.equals("count") ||
+                category.startsWith("participation");
+    }
+
     public int getTotalByType(String type) {
         lock.readLock().lock();
         try {

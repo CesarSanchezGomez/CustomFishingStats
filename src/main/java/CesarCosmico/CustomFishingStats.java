@@ -343,6 +343,10 @@ public class CustomFishingStats extends JavaPlugin {
         return globalStatsService.getTotalByType(type);
     }
 
+    public boolean isGlobalOnlyCategory(String type, String category) {
+        return globalStatsService.isGlobalOnlyCategory(type, category);
+    }
+
     public List<String> getAllTypes() {
         Set<String> allTypes = new LinkedHashSet<>();
         Set<String> yourTypes = globalStatsService.getAllTypes();

@@ -47,7 +47,9 @@ public class TopCommand extends BaseCommand {
                     builder.suggest("all");
                     List<String> categories = plugin.getCategoriesByType(type);
                     if (categories != null) {
-                        categories.forEach(builder::suggest);
+                        categories.stream()
+                                .filter(cat -> !plugin.isGlobalOnlyCategory(type, cat))
+                                .forEach(builder::suggest);
                     }
                 }
             } catch (Exception e) {
@@ -77,6 +79,13 @@ public class TopCommand extends BaseCommand {
         try {
             String type = ctx.getArgument("type", String.class);
             String category = ctx.getArgument("category", String.class);
+
+            if (plugin.isGlobalOnlyCategory(type, category)) {
+                sendPrefixed(ctx.getSource().getSender(), "top.global_only_category",
+                        Placeholder.parsed("type", type),
+                        Placeholder.parsed("category", category));
+                return 0;
+            }
 
             if (type.equalsIgnoreCase("progress")) {
                 return executeProgress(ctx, category, page);
